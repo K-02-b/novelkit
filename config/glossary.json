@@ -1,0 +1,47 @@
+{
+  "cultural_nuances": {
+    "万": "非精确计数时表示极多。‘万物’译为 'myriad things' 或 'all creation'；‘万遍’译为 'a thousand times over' 或 'countless times'；‘亿万’译为 'millions upon millions'。",
+    "两三": "表示少量或模糊概念。常用 'a handful of' (强调少得可怜), 'a few', 或 'a couple of'。",
+    "三": "单独的‘三’字在中文语境下常作虚指。表示‘多次’时译为 'time and again' 或 'repeatedly'（如三番五次）；表示‘少量’时译为 'a few'。",
+    "三尺": "文学修辞中的长度虚指。形容深度（如冰冻三尺）译为 'deep' 或 'profound'；形容剑长或神明距离（如三尺神明）译为 'a few feet' 或意译为 'just above'，应避免死板转换物理单位。",
+    "韭菜": "在金融或收割语境下，译为 'sheep to be fleeced' (等待剪羊毛的羊) 或 'suckers' (易受骗的傻瓜)；在描述底层群体时，可用 'bottom-feeders'。",
+    "快乐水": "通常指可乐或含糖汽水，地道译法为 'liquid gold' (幽默说法), 'bubbly', 或直接用 'Coke/Soda'。",
+    "内卷": "描述过度竞争时，地道表达是 'rat race' (耗子赛跑/无休止的竞争) 或 'hyper-competition'。",
+    "躺平": "在对抗社会压力的语境下，译为 'checking out' (精神退出), 'lying flat', 或 'opting out of the rat race'。",
+    "狗粮": "指情侣秀恩爱，地道译法是 'PDA' (Public Display of Affection) 或描述为 'too much sugar/sweetness'。",
+    "金手指": "网文特有概念，地道译法是 'cheat code', 'god-tier perk', 或 'broken ability'。",
+    "修仙": "在熬夜语境下，译为 'pulling an all-nighter' 或 'ascending through sleep deprivation' (幽默写法)；在升级流语境下保留 'Cultivation'。",
+    "撒娇": "根据语气译为 'acting cute', 'wheedling', 或 'using a sweet, pleading voice'。",
+    "靠山": "在权力博弈中，译为 'backer', 'patron', 或更生动的 'powerful umbrella'。",
+    "吃瓜": "地道表达是 'spilling the tea' (聊八卦) 或 'just here for the drama'。",
+    "画大饼": "在商业忽悠语境下，译为 'selling a pipe dream' (卖白日梦) 或 'making empty promises'。",
+    "碰瓷": "地道译法是 'staged accident'，在比喻义下可用 'clout-chasing' (蹭热度) 或 'insurance scam'。",
+    "缘分": "玄幻语境译为 'karmic tie' 或 'fate'；日常语境译为 'serendipity' 或 'meant to be'。",
+    "面子": "‘给面子’译为 'show respect' 或 'humor someone'；‘丢脸’译为 'lose face' 或 'disgrace oneself'。",
+    "凡尔赛": "形容低调地炫耀，地道译法是 'humblebrag'。",
+    "翻车": "指计划失败或人设崩塌，译为 'epic fail', 'backfire', 或 'hit a snag'。",
+    "吐槽": "根据力度译为 'snark', 'roast', 或 'call out'。",
+    "胡说八道": "形容瞎扯，地道译法是 'spouting nonsense', 'bullshitting' (粗鲁), 或 'talking out of one's ass' (极粗鲁)。",
+    "心腹": "译为 'confidant', 'right-hand man', 或更具西幻感的 'inner circle'。",
+    "装逼": "通常译为 'flexing', 'showboating', 或 'putting on airs'。",
+    "造化": "指运气或机遇，译为 'good fortune' 或 'providence'；指自然造物译为 'the workings of nature'。",
+    "家人们": "语境常为社交/直播语境下的亲昵称呼，此时带有一种虚伪的煽动感或情感联结。应使用单数集体名词 'Family!' 或 'My dear family' 来体现那种‘套近乎’的逻辑。",
+    "咸鱼": "文化意向词，指代一种‘拒绝内卷、追求极简与清闲’的生活哲学。在非贬义语境下，应转译为体现‘赋闲、闲散、悠然’的词汇，如 'Idler' 或 'Indolent lifestyle'，而非直译为食物。",
+    "带节奏": "指通过操纵信息或情绪来引导群体舆论的方向。地道译法应体现‘叙事操纵’或‘搅动局势’，推荐译为 'Spinning the narrative' 或 'Stirring the pot'。",
+    "恶意讨薪": "带有反讽意味的压迫性措辞，指将正当的薪资诉求污名化。译为 'Seditious Wage Protests'，通过 'Seditious'（煽动叛乱的）体现出上位者强行定罪的傲慢与荒诞感。",
+    "PUA": {
+      "emotional_context": "最地道的对标词为 'Gaslighting' (煤气灯效应)，强调通过扭曲事实让受害者产生自我怀疑；或使用 'Emotional Manipulation' (情感操纵)。",
+      "workplace_context": "指代职场中的精神压榨与人格贬低，译为 'Professional Negging' (职场打压) 或 'Toxic Management' (有毒的管理)。",
+      "social_logic": "若侧重于‘先给甜头再打击’的逻辑，可用 'Love Bombing and Devaluing' (先爱意轰炸再贬低价值)；形容上位者对下位者的精神控制，可用 'Psychological Domination'。",
+      "self_pua": "自嘲语境下的自我施压，译为 'Self-Sabotage' (自我妨碍) 或 'Internalized Pressure' (内化的压力)。"
+    },
+    "谁家好人": {
+      "ironic_rhetorical": "用于吐槽离谱行为。最神似的翻译是 'What kind of sane person...?' 或 'Who in their right mind...?'，强调‘正常人根本不会干这事’。",
+      "sarcastic_rhetorical": "若侧重于讽刺对方的行为‘阴间’或不正常，可用 'What sort of decent person does that?'。",
+      "internet_slang_vibe": "在非正式语境下，译为 'Seriously, who does that?' 或带有强烈嫌弃感的 'Is this even human behavior?'。",
+      "fantasy_context": "在网文或奇幻语境下吐槽反派或主角的骚操作，可用 'No ordinary mortal would...' 或 'What kind of noble soul would ever...?' (反话)。"
+    },
+    "卧虎藏龙": "Crouching Tigers, Hidden Dragons",
+    "鸡脚": "表示'露出鸡脚'时：exposing the fox's tail"
+  }
+}

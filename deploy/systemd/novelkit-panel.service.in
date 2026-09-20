@@ -1,0 +1,34 @@
+[Unit]
+Description=NovelKit 网文翻译工作台（Web GUI）
+Documentation=file:@PROJECT_DIR@/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@RUN_USER@
+Group=@RUN_GROUP@
+WorkingDirectory=@PROJECT_DIR@
+
+# 可选的环境文件：PANEL_HOST / PANEL_PORT / PANEL_TOKEN。
+# 本机部署留空即可（默认只监听 127.0.0.1:8897）。
+# 云服务器部署建议：PANEL_HOST=127.0.0.1 + Nginx 反代（见 deploy/cloud.md），
+# 或 PANEL_HOST=0.0.0.0 并**必须**同时设置 PANEL_TOKEN。
+EnvironmentFile=-@PROJECT_DIR@/webpanel/panel.env
+
+ExecStart=@PYTHON@ @PROJECT_DIR@/webpanel/server.py
+
+# 面板会读写工作区里的章节/术语/日志，给足文件描述符。
+LimitNOFILE=65535
+
+Restart=always
+RestartSec=3
+# 任务日志与崩溃信息都进 journal：journalctl -u novelkit-panel -f
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

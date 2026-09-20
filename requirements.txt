@@ -1,0 +1,7 @@
+# 核心依赖（scripts/translate.py / check.py / retranslate.py / refine.py 必需）
+openai>=1.40.0
+python-dotenv>=1.0.0
+
+# EPUB 处理：scripts/split_epub.py 与面板的「导入 EPUB」都要用
+EbookLib>=0.18
+beautifulsoup4>=4.12.0

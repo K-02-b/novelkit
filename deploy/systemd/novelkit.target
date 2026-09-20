@@ -1,0 +1,10 @@
+# NovelKit 服务组：一条命令全起全停
+#   sudo systemctl enable --now novelkit.target
+#   sudo systemctl status novelkit.target
+[Unit]
+Description=NovelKit 网文翻译工作台（Web GUI）
+Wants=novelkit-panel.service
+After=novelkit-panel.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NovelKit · 网文翻译工作台</title>
+<!-- 图标：file: 单帧 256×256 PNG 的 ICO，现代浏览器都认；
+     另附 PNG 给 Safari 的 apple-touch-icon 与 README 使用。 -->
+<link rel="icon" href="/static/icon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/static/icon.png" sizes="256x256">
+<link rel="apple-touch-icon" href="/static/icon.png">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <img class="brand-icon" src="/static/icon.png" alt="" width="26" height="26">
+      <h1>NovelKit</h1>
+      <p>网文翻译工作台</p>
+    </div>
+    <div class="side-list" id="nav"><div class="muted small" style="padding:8px">加载中…</div></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <h2 id="view-title">概览</h2>
+      <span class="meta" id="view-meta"></span>
+      <span class="spacer"></span>
+    </header>
+    <div class="content" id="content"></div>
+  </main>
+</div>
+<div id="modal-host"></div>
+<div id="toast-host"></div>
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>
