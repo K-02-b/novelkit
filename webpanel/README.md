@@ -105,7 +105,9 @@ sudo ./deploy/install-services.sh
   一个对齐行含多段中文时整行一起处理。
   命令行层面 `scripts/retranslate.py`（纯重译）与 `scripts/refine.py --ignore-draft` 都仍然可用。
 - **RAG 默认开启**，但会**记住上次的选择**（localStorage）：首次使用默认勾选，
-  你手动改过之后就沿用你的选择，刷新/换章节都不会被重置。
+  你手动改过之后就沿用你的选择，刷新/换章节都不会被重置。开启后除了启发式候选，
+  还会**先问一次模型**「本章哪些词要查语境」，把它的提名一起检索（命令行可用
+  `--no-rag-ask` 关掉这次额外请求）。
 - **补充要求输入框**：整章翻译 / 局部重译 / Refine 各有一个「▸ 提示词」按钮，
   展开即可写本次任务的额外要求（失焦自动保存，Ctrl+S 立即保存），
   以 `<user_supplement>` 注入提示词。内容存在 `webpanel/prompt_snippets.json`。

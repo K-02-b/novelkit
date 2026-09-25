@@ -72,7 +72,7 @@ python scripts/translate.py --dir my-novel --chapter "1-2" --dry-run
 | `--allow-term-changes` | 允许覆盖既定译法（全局术语库始终不可覆盖） |
 | `--show-conflicts` | 打印累计的冲突记录后退出 |
 | `--reindex` | 只重建 `global_glossary_tracker.json` 后退出 |
-| `--rag` `--rag-scope` `--rag-terms` `--rag-snippets` `--rag-window` `--rag-budget` | RAG 术语上下文检索 |
+| `--rag` `--rag-scope` `--rag-terms` `--rag-snippets` `--rag-window` `--rag-budget` | RAG 术语上下文检索（默认 10 词 / 3 片段 / 9000 字符预算；开启时默认额外问一次模型提名关键词，`--no-rag-ask` 关闭） |
 | `--debug [console\|log]` `--log-dir` `--note [1\|2]` `--output` | 日志与调试输出 |
 
 ## 2. 校对 — `scripts/check.py`

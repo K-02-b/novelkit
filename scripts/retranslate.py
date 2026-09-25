@@ -74,6 +74,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base_url", default=config.get_base_url(), help="API 地址")
     parser.add_argument("--api_key", default=None, help="API Key（默认读 .env）")
     parser.add_argument("--rag", action="store_true", help="启用 RAG 术语上下文检索")
+    parser.add_argument("--no-rag-ask", dest="rag_ask", action="store_false",
+                        help="RAG 开启时默认会额外问一次模型「哪些词要查」；加此项只跑启发式候选")
     parser.add_argument("--context", type=int, default=500, help="参考前文长度（负数=章节数）")
     parser.add_argument("--future", type=int, default=0, help="参考后文长度（负数=章节数）")
     parser.add_argument("--anchor", type=int, choices=[0, 1, 2], default=1, help="风格基准强度")
@@ -329,12 +331,39 @@ def main(argv: Optional[List[str]] = None) -> int:
     anchor = anchor_text(work_dir, args.chapter, args.anchor)
     prev_ctx = previous_context(work_dir, args.chapter, args.context)
 
-    # ---- RAG（与整章翻译同一实现） ----
+    # ---- 客户端：dry-run 不需要，放在 RAG 之前以便提名关键词
+    client = None
+    if not args.dry_run:
+        try:
+            client = llm.create_client(api_key=args.api_key, base_url=args.base_url, timeout=args.timeout)
+        except llm.DependencyError as exc:
+            ui.error(str(exc))
+            return EXIT_DEPENDENCY
+        except Exception as exc:  # noqa: BLE001
+            ui.error(str(exc))
+            return EXIT_FATAL
+
+    # ---- RAG（与整章翻译同一实现）
     research = ""
     if args.rag:
+        researcher = nkrag.TermResearcher(str(work_dir))
+        extra_terms: List[str] = []
+        if args.rag_ask and client is not None:
+            try:
+                extra_terms = researcher.propose_terms(
+                    chapter_text, relevant,
+                    complete=lambda s, u: llm.ask_terms(
+                        client, model=args.model, system=s, user=u
+                    ),
+                )
+                if extra_terms:
+                    ui.info("RAG 模型提名关键词: " + "、".join(extra_terms))
+            except Exception as exc:  # noqa: BLE001
+                ui.warn(f"RAG 模型提名失败，改用启发式候选: {exc}")
         try:
-            researcher = nkrag.TermResearcher(str(work_dir))
-            findings = researcher.research(chapter_text, relevant, current_chapter=args.chapter)
+            findings = researcher.research(
+                chapter_text, relevant, current_chapter=args.chapter, extra_terms=extra_terms
+            )
             research = researcher.render(findings)
             if findings:
                 ui.info("RAG 检索到 " + "、".join(f"{f.term}({len(f.snippets)})" for f in findings))
@@ -363,15 +392,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         return EXIT_OK
 
     # ---- 调用模型 ----
-    try:
-        client = llm.create_client(api_key=args.api_key, base_url=args.base_url, timeout=args.timeout)
-    except llm.DependencyError as exc:
-        ui.error(str(exc))
-        return EXIT_DEPENDENCY
-    except Exception as exc:  # noqa: BLE001
-        ui.error(str(exc))
-        return EXIT_FATAL
-
     params: Dict[str, Any] = {
         "model": args.model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],

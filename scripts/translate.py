@@ -357,6 +357,28 @@ class Translator:
                     order[position + 1 + offset] = next_index
         raise last_error  # pragma: no cover
 
+    def _ask_model_for_terms(self, content: str, relevant: Dict[str, Any]) -> List[str]:
+        """额外调一次模型，让它自己提名本章值得检索语境的词。
+
+        只负责发请求；提示词与"必须出现在正文里"的校验都在 novelkit.rag 里，
+        保证命令行、面板与各脚本行为一致。失败由调用方捕获，不影响翻译。
+        """
+        if self.client is None:
+            return []
+
+        def complete(system: str, user: str) -> str:
+            response = self._create(
+                self.args.model,
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+            message = response.choices[0].message
+            return getattr(message, "content", "") or ""
+
+        return self.researcher().propose_terms(content, relevant, complete=complete)
+
     # ------------------------------------------------------------------ 解析
 
     @staticmethod
@@ -462,9 +484,19 @@ class Translator:
         # ---- RAG：为"可能有特定内涵"的候选词检索全书（默认后文）语境
         research_block = ""
         if args.rag:
+            extra_terms: List[str] = []
+            # 先让模型自己提名关键词；这一步失败不影响启发式检索
+            if args.rag_ask and self.client is not None and not args.dry_run:
+                try:
+                    extra_terms = self._ask_model_for_terms(original_content, relevant)
+                    if extra_terms:
+                        ui.info("RAG 模型提名关键词: " + "、".join(extra_terms))
+                except Exception as exc:  # noqa: BLE001
+                    ui.warn(f"RAG 模型提名失败，改用启发式候选: {_short_error(exc)}")
             try:
                 findings = self.researcher().research(
-                    original_content, relevant, current_chapter=target_num
+                    original_content, relevant, current_chapter=target_num,
+                    extra_terms=extra_terms,
                 )
                 research_block = self.researcher().render(findings)
                 if findings:
@@ -1086,13 +1118,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--rag", action="store_true",
         help="开启检索：为可能有特定内涵的词检索全书（默认后文）用法语境，辅助选定译法",
     )
-    rag_group.add_argument("--rag-terms", type=int, default=6, metavar="N", help="每次最多检索多少个候选词")
-    rag_group.add_argument("--rag-snippets", type=int, default=2, metavar="K", help="每个候选词最多取几条上下文片段")
+    rag_group.add_argument("--rag-terms", type=int, default=10, metavar="N", help="每次最多检索多少个候选词")
+    rag_group.add_argument("--rag-snippets", type=int, default=3, metavar="K",
+                           help="每个候选词最多取几条上下文片段（优先分散在不同章节）")
     rag_group.add_argument("--rag-window", type=int, default=100, metavar="W", help="片段在命中位置两侧扩展的字符数")
     rag_group.add_argument("--rag-scope", choices=["future", "past", "all"], default="future",
                            help="检索范围：future=只看后文（默认）, past=只看前文, all=全后文优先")
-    rag_group.add_argument("--rag-budget", type=int, default=6000, metavar="CHARS",
-                           help="RAG 结果注入提示词的字符预算上限")
+    rag_group.add_argument("--rag-budget", type=int, default=9000, metavar="CHARS",
+                           help="RAG 结果注入提示词的字符预算上限（按词条均摊，不会整块丢弃后面的词）")
+    rag_group.add_argument("--no-rag-ask", dest="rag_ask", action="store_false",
+                           help="RAG 开启时默认会额外问一次模型「你觉得哪些词要查」；加此项可只跑启发式候选")
 
     parser.set_defaults(json_mode=True)
     return parser

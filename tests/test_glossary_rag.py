@@ -460,6 +460,207 @@ def test_render_empty_when_no_findings() -> None:
         shutil.rmtree(tmp)
 
 
+# ==========================================================================
+# B2. 关键词处理增强（凝固度 / 自由度 / 首见加权 / 片段分散 / 预算均摊）
+# ==========================================================================
+
+def test_term_profile_tracks_span_and_neighbours() -> None:
+    """term_profile 一次扫描给出章节数/首末章/邻字分布，供打分与自由度使用。"""
+    tmp = make_corpus()
+    try:
+        index = nkrag.CorpusIndex(tmp)
+        profile = index.term_profile("云舟")
+        expect(profile.chapters == 4, str(profile.chapters))
+        expect(profile.total == 6, str(profile.total))
+        expect(profile.first == 1 and profile.last == 4, f"{profile.first}/{profile.last}")
+        expect(profile.sample == [1, 2, 3, 4], str(profile.sample))
+        expect(sum(profile.left.values()) == 6, str(profile.left))
+        expect(sum(profile.right.values()) == 6, str(profile.right))
+        expect(len(profile.right) >= 3, f"右邻字应多样: {dict(profile.right)}")
+        # 统计缓存复用：同一个对象返回同一份画像
+        expect(index.term_profile("云舟") is profile, "画像应缓存复用")
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_cohesion_and_entropy_helpers() -> None:
+    from collections import Counter
+
+    text = "苍穹神木苍穹神木苍穹神木"
+    counts = nkrag._raw_ngram_counts(text)
+    # 真词整体反复出现，凝固度应高于跨词边界的"木苍"（"神木"|"苍穹" 的接缝）
+    real = nkrag._cohesion("苍穹神木", counts, len(text))
+    seam = nkrag._cohesion("木苍", counts, len(text))
+    expect(real > seam, f"真词凝固度应高于接缝片段: {real} vs {seam}")
+    expect(real >= 4, f"真词凝固度应较高: {real}")
+    # 单一分布熵为 0，两种等概率为 ln2
+    expect(abs(nkrag._entropy(Counter({"a": 1}))) < 1e-9, "单一分布熵应为 0")
+    expect(abs(nkrag._entropy(Counter({"a": 1, "b": 1})) - 0.693147) < 1e-4, "两种等概率熵应为 ln2")
+
+
+def test_fixed_context_fragment_is_dropped() -> None:
+    """固定搭配里的跨词片段不应成为候选词，但一侧固定的真词条要保留。"""
+    from collections import Counter
+
+    # 左右都固定 → 判定为固定搭配片段
+    fixed = nkrag.TermProfile(left=Counter({"魂": 12}), right=Counter({"魂": 12}))
+    expect(nkrag._looks_fixed_context(fixed) is True, "两侧都固定应视为片段")
+    # 一侧固定、另一侧自由 → 仍可能是真词条（"镇魂塔的……"）
+    half = nkrag.TermProfile(left=Counter({"魂": 6, "的": 6}), right=Counter({"的": 12}))
+    expect(nkrag._looks_fixed_context(half) is False, "一侧自由就应放行")
+
+    tmp = tempfile.mkdtemp(prefix="novelkit_rag_fixed_")
+    try:
+        # "石镇住了亡魂" 是跨句子成分的窗口，中间夹了结构助词，不应生成
+        sentence = "镇魂塔的镇魂石镇住了亡魂。"
+        for number in range(6):
+            Path(tmp, f"{number}_origin.txt").write_text(sentence * 2, encoding="utf-8")
+        index = nkrag.CorpusIndex(tmp)
+        chapter_text = Path(tmp, "2_origin.txt").read_text(encoding="utf-8")
+        terms = [
+            c.term
+            for c in nkrag.extract_candidates(chapter_text, empty(), index, max_terms=10, current_chapter=2)
+        ]
+        expect("镇魂" in terms, f"真词应入选: {terms}")
+        expect(not any("了" in t[1:-1] for t in terms), f"夹虚词的短语片段不应入选: {terms}")
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_first_appearance_in_current_chapter_is_boosted() -> None:
+    """首次出现在当前章节的新概念要排在更前面（译法要在这里定下来）。"""
+    tmp = tempfile.mkdtemp(prefix="novelkit_rag_first_")
+    try:
+        for number in range(5):
+            body = "旧物静静躺在堂中，旧物蒙着灰尘。"
+            if number >= 3:
+                body += "玄铁令泛着冷光，玄铁令无人敢碰。"
+            Path(tmp, f"{number}_origin.txt").write_text(body, encoding="utf-8")
+
+        index = nkrag.CorpusIndex(tmp)
+        chapter_text = Path(tmp, "3_origin.txt").read_text(encoding="utf-8")
+
+        def score_of(current: int) -> float:
+            for candidate in nkrag.extract_candidates(
+                chapter_text, empty(), index, max_terms=10, current_chapter=current
+            ):
+                if candidate.term == "玄铁令":
+                    return candidate.score
+            raise AssertionError("玄铁令 应被发现")
+
+        with_current = score_of(3)
+        without_current = score_of(-1)
+        expect(with_current > without_current,
+               f"本章首见应加分: {with_current} vs {without_current}")
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_search_spreads_snippets_across_chapters() -> None:
+    """同一章里出现 3 次时，也应优先分散到不同章节，而不是只取当前章。"""
+    tmp = make_corpus()
+    try:
+        index = nkrag.CorpusIndex(tmp)
+        # 第 1 章有 3 次云舟，第 2/3 章各 1 次
+        snippets = index.search("云舟", current=0, limit=3, window=60, scope="future")
+        expect(len(snippets) == 3, str(snippets))
+        expect(len({s.chapter for s in snippets}) == 3,
+               f"片段应分散在不同章节: {[s.chapter for s in snippets]}")
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_render_fair_share_keeps_more_terms() -> None:
+    """预算有限时按词条均摊，不能因为第一条太长就让后面的词条整块消失。"""
+    tmp = make_corpus()
+    try:
+        researcher = nkrag.TermResearcher(tmp, snippets_per_term=3, max_terms=10, budget=1500)
+        note = "说明" * 120
+        long_text = "片段" * 160
+        results = [
+            nkrag.TermResearch(
+                term=f"词{i}",
+                source="cultural",
+                note=note,
+                snippets=[nkrag.Snippet(9, "future", long_text) for _ in range(3)],
+            )
+            for i in range(5)
+        ]
+        block = researcher.render(results)
+        expect(block.count('word="') >= 4,
+               f"预算紧张时仍应保留多数词条: 实际 {block.count('word=\"')} 条\n{block[:300]}")
+        expect(len(block) <= 1700, f"总长度仍应受预算约束: {len(block)}")
+    finally:
+        shutil.rmtree(tmp)
+
+
+# ==========================================================================
+# B3. 模型提名关键词（--rag 时额外问一次模型）
+# ==========================================================================
+
+def test_build_proposal_messages_includes_chapter_and_known_terms() -> None:
+    glossary = {"fixed_terms": {"林越": "Lin Yue", "云舟": "Memory Retainer"}}
+    system, user = nkrag.build_proposal_messages("林越走进苍岚之森。", glossary)
+    expect("terms" in system and "JSON" in system, "system 应要求输出 terms JSON")
+    expect("林越" in user and "云舟" in user, "应把已知术语列给模型，避免重复提名")
+    expect("林越走进苍岚之森。" in user, "应带上章节正文")
+
+
+def test_parse_proposals_filters_and_tolerates_formats() -> None:
+    chapter = "林越拿出一枚玄铁令，玄铁令上刻着古朴纹路。"
+    glossary = {"fixed_terms": {"林越": "Lin Yue"}}
+
+    # 1) 标准 JSON
+    raw = json.dumps(
+        {"terms": ["玄铁令", "林越", "根本不存在的词", "灵", "这是一个超过八个字的候选词条"]},
+        ensure_ascii=False,
+    )
+    expect(nkrag.parse_proposals(raw, chapter, glossary) == ["玄铁令"],
+           str(nkrag.parse_proposals(raw, chapter, glossary)))
+
+    # 2) ```json 围栏
+    fenced = '```json\n{"terms": ["玄铁令"]}\n```'
+    expect(nkrag.parse_proposals(fenced, chapter, glossary) == ["玄铁令"])
+
+    # 3) 裸列表 / 纯文本列表兜底
+    expect(nkrag.parse_proposals('["玄铁令"]', chapter, glossary) == ["玄铁令"])
+    expect(nkrag.parse_proposals("- 玄铁令\n- 林越", chapter, glossary) == ["玄铁令"])
+
+    # 4) 空回复 / 无效回复不炸
+    expect(nkrag.parse_proposals("", chapter, glossary) == [])
+    expect(nkrag.parse_proposals("嗯，我觉得没有特别需要查的词。", chapter, glossary) == [])
+
+
+def test_proposed_terms_join_retrieval() -> None:
+    """启发式发现不了的词（本章只出现一次），模型提名后应能进入检索。"""
+    tmp = tempfile.mkdtemp(prefix="novelkit_rag_ask_")
+    try:
+        Path(tmp, "0_origin.txt").write_text("这是一部测试小说的简介。", encoding="utf-8")
+        Path(tmp, "1_origin.txt").write_text("玄铁令静静躺在桌上，林越盯着它。", encoding="utf-8")
+        Path(tmp, "2_origin.txt").write_text("玄铁令泛着冷光，玄铁令无人敢碰。", encoding="utf-8")
+        Path(tmp, "3_origin.txt").write_text("他握紧玄铁令，玄铁令微微发烫。", encoding="utf-8")
+
+        chapter_text = Path(tmp, "1_origin.txt").read_text(encoding="utf-8")
+        index = nkrag.CorpusIndex(tmp)
+        auto = [
+            c.term
+            for c in nkrag.extract_candidates(chapter_text, empty(), index, max_terms=10, current_chapter=1)
+        ]
+        expect("玄铁令" not in auto, f"仅出现一次，启发式本不该发现: {auto}")
+
+        researcher = nkrag.TermResearcher(tmp, window=60, snippets_per_term=2)
+        findings = researcher.research(
+            chapter_text, empty(), current_chapter=1, extra_terms=["玄铁令"]
+        )
+        by_term = {f.term: f for f in findings}
+        expect("玄铁令" in by_term, f"模型提名的词应被检索: {list(by_term)}")
+        expect(by_term["玄铁令"].source == "proposed", by_term["玄铁令"].source)
+        expect(by_term["玄铁令"].snippets, "应检索到后文用法")
+        expect('word="玄铁令"' in researcher.render(findings), "应出现在注入块里")
+    finally:
+        shutil.rmtree(tmp)
+
+
 def test_search_last_chapter_has_no_future() -> None:
     tmp = make_corpus()
     try:
@@ -564,27 +765,65 @@ def test_e2e_conflicting_term_is_blocked() -> None:
 
 
 def test_e2e_rag_block_reaches_the_model() -> None:
-    """端到端：--rag 时提示词里出现 <term_context_research> 且含后文片段。"""
+    """端到端：--rag 时先问一次候选词，再把检索块注入翻译提示词。"""
     tmp = build_workspace()
     try:
+        proposal = json.dumps({"terms": ["苍穹神木", "云舟"]}, ensure_ascii=False)
         payload = json.dumps({"translated_content": "Chapter 1 translated."})
         translator, main_module = build_translator(
             tmp, ["--chapter", "1", "--rag", "--rag-terms", "3", "--rag-snippets", "2"]
         )
-        translator.client = FakeClient([payload])
+        translator.client = FakeClient([proposal, payload])
 
         outcome = translator.translate_chapter(1)
         expect(outcome.status == "ok", outcome.message)
         expect(outcome.rag_terms > 0, "应有候选词被检索")
+        expect(len(translator.client.calls) == 2, "应先问一次候选词，再发起翻译请求")
 
-        call = translator.client.calls[0]
+        call = translator.client.calls[-1]
         user_msg = call["messages"][1]["content"]
         expect("<term_context_research>" in user_msg, "user 消息应包含检索块")
         expect('word="' in user_msg, "检索块应含 word 属性")
         expect("严禁" in user_msg, "检索块应含禁止剧透的说明")
+        # 模型提名的词要真的进入检索结果
+        expect('word="苍穹神木"' in user_msg, "模型提名的词应进入检索块")
         # 后文（第 2/3/4 章）里才有的内容应出现在片段中
         expect("云舟说道" in user_msg or "云舟当年" in user_msg or "云舟已经离开" in user_msg,
                "应检索到后文对该词的用法")
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_e2e_rag_ask_can_be_disabled() -> None:
+    """--no-rag-ask 时只跑启发式候选，不再额外调用模型。"""
+    tmp = build_workspace()
+    try:
+        payload = json.dumps({"translated_content": "Chapter 1 translated."})
+        translator, main_module = build_translator(
+            tmp, ["--chapter", "1", "--rag", "--no-rag-ask"]
+        )
+        translator.client = FakeClient([payload])
+        expect(translator.args.rag_ask is False, "参数应被解析为关闭提问")
+        expect(translator.translate_chapter(1).status == "ok")
+        expect(len(translator.client.calls) == 1, "关闭后不应多出候选词请求")
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_e2e_rag_survives_bad_proposal_reply() -> None:
+    """模型提名回复不是 JSON 时，不影响翻译，也仍会走启发式检索。"""
+    tmp = build_workspace()
+    try:
+        payload = json.dumps({"translated_content": "Chapter 1 translated."})
+        translator, main_module = build_translator(tmp, ["--chapter", "1", "--rag"])
+        translator.client = FakeClient(["嗯，我觉得没有特别需要查的词。", payload])
+
+        outcome = translator.translate_chapter(1)
+        expect(outcome.status == "ok", outcome.message)
+        expect(outcome.rag_terms > 0, "提名解析失败后仍应有启发式候选")
+        expect(len(translator.client.calls) == 2, "提名请求失败也不该跳过翻译请求")
+        user_msg = translator.client.calls[-1]["messages"][1]["content"]
+        expect("<term_context_research>" in user_msg, "启发式检索块仍应注入")
     finally:
         shutil.rmtree(tmp)
 
@@ -675,8 +914,19 @@ def main() -> int:
         ("RAG : 预算截断", test_render_budget_truncates),
         ("RAG : 无结果时不注入", test_render_empty_when_no_findings),
         ("RAG : 末章无后文", test_search_last_chapter_has_no_future),
+        ("RAG : 画像含首末章与邻字", test_term_profile_tracks_span_and_neighbours),
+        ("RAG : 凝固度与邻字熵", test_cohesion_and_entropy_helpers),
+        ("RAG : 固定搭配片段被剔除", test_fixed_context_fragment_is_dropped),
+        ("RAG : 本章首见加权", test_first_appearance_in_current_chapter_is_boosted),
+        ("RAG : 片段分散到不同章节", test_search_spreads_snippets_across_chapters),
+        ("RAG : 预算按词条均摊", test_render_fair_share_keeps_more_terms),
+        ("RAG : 提名提示词含正文与已知词", test_build_proposal_messages_includes_chapter_and_known_terms),
+        ("RAG : 提名解析与校验", test_parse_proposals_filters_and_tolerates_formats),
+        ("RAG : 模型提名并入检索", test_proposed_terms_join_retrieval),
         ("端到端: 冲突术语被拦截", test_e2e_conflicting_term_is_blocked),
         ("端到端: RAG 块进入提示词", test_e2e_rag_block_reaches_the_model),
+        ("端到端: --no-rag-ask 关闭提问", test_e2e_rag_ask_can_be_disabled),
+        ("端到端: 提名回复异常不影响检索", test_e2e_rag_survives_bad_proposal_reply),
         ("端到端: RAG 默认关闭", test_e2e_rag_off_by_default),
         ("端到端: RAG+dry-run 不写盘", test_e2e_rag_does_not_write_files_or_break_dry_run),
         ("端到端: 第2章不能覆盖第1章", test_e2e_second_chapter_cannot_override_first),

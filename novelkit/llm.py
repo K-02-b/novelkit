@@ -183,6 +183,36 @@ def call_chat(
     raise last_exc  # pragma: no cover - 逻辑上不可达
 
 
+def ask_terms(
+    client,
+    *,
+    model: str,
+    system: str,
+    user: str,
+    temperature: float = 0.2,
+    extra_body: Optional[Dict[str, Any]] = None,
+    retries: int = 0,
+) -> str:
+    """RAG 关键词提名用的一次性请求：返回模型回复原文。
+
+    提示词与结果校验在 novelkit.rag（build_proposal_messages / parse_proposals），
+    这里只负责发请求，保证各脚本用的是同一套参数形态。
+    """
+    params: Dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": temperature,
+        "response_format": {"type": "json_object"},
+    }
+    if extra_body:
+        params["extra_body"] = extra_body
+    response = call_chat(client, retries=retries, **params)
+    return response.choices[0].message.content or ""
+
+
 async def acall_chat(
     client,
     *,
